@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.agents.eia_agent import run_eia
+from app.graph.eia_graph import eia_graph
 
 
 router = APIRouter()
@@ -17,6 +17,13 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    response = run_eia(request.message)
+    result = eia_graph.invoke(
+        {
+            "user_message": request.message,
+            "response": "",
+        }
+    )
 
-    return ChatResponse(response=response)
+    return ChatResponse(
+        response=result["response"]
+    )
