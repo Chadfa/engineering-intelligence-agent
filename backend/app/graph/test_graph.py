@@ -3,8 +3,12 @@ from app.graph.eia_graph import eia_graph
 
 result = eia_graph.invoke(
     {
-        "user_message": "Explain what a Python virtual environment is.",
+        "user_message": (
+            "Analyze this GitHub repository: "
+            "https://github.com/Chadfa/engineering-intelligence-agent"
+        ),
         "response": "",
+        "github_data": None,
     }
 )
 
