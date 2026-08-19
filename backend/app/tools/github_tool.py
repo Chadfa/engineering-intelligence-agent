@@ -1,8 +1,14 @@
 import base64
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 GITHUB_API = "https://api.github.com"
@@ -22,9 +28,7 @@ def _headers() -> dict[str, str]:
     return headers
 
 
-def get_repository(owner: str, repo: str) -> dict[str, Any]:
-    url = f"{GITHUB_API}/repos/{owner}/{repo}"
-
+def _get(url: str) -> Any:
     response = httpx.get(
         url,
         headers=_headers(),
@@ -33,7 +37,13 @@ def get_repository(owner: str, repo: str) -> dict[str, Any]:
 
     response.raise_for_status()
 
-    data = response.json()
+    return response.json()
+
+
+def get_repository(owner: str, repo: str) -> dict[str, Any]:
+    data = _get(
+        f"{GITHUB_API}/repos/{owner}/{repo}"
+    )
 
     return {
         "name": data["name"],
@@ -44,6 +54,8 @@ def get_repository(owner: str, repo: str) -> dict[str, Any]:
         "forks": data["forks_count"],
         "open_issues": data["open_issues_count"],
         "default_branch": data["default_branch"],
+        "visibility": data["visibility"],
+        "archived": data["archived"],
         "html_url": data["html_url"],
     }
 
@@ -53,17 +65,11 @@ def get_repository_contents(
     repo: str,
     path: str = "",
 ) -> list[dict[str, Any]]:
-    url = f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
-
-    response = httpx.get(
-        url,
-        headers=_headers(),
-        timeout=20,
+    url = (
+        f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
     )
 
-    response.raise_for_status()
-
-    data = response.json()
+    data = _get(url)
 
     if isinstance(data, dict):
         data = [data]
@@ -84,37 +90,189 @@ def get_file(
     repo: str,
     path: str,
 ) -> str:
-    url = f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
-
-    response = httpx.get(
-        url,
-        headers=_headers(),
-        timeout=20,
+    data = _get(
+        f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
     )
 
-    response.raise_for_status()
-
-    data = response.json()
-
     if data.get("encoding") != "base64":
-        raise ValueError("GitHub returned an unsupported file encoding.")
+        raise ValueError(
+            f"Unsupported encoding for {path}"
+        )
 
-    content = base64.b64decode(data["content"]).decode(
+    return base64.b64decode(
+        data["content"]
+    ).decode(
         "utf-8",
         errors="replace",
     )
 
-    return content
+
+# Files we generally don't want EIA to ingest.
+IGNORED_DIRECTORIES = {
+    ".git",
+    ".venv",
+    "node_modules",
+    "__pycache__",
+    ".next",
+    "dist",
+    "build",
+}
 
 
-def inspect_repository(owner: str, repo: str) -> dict[str, Any]:
-    repository = get_repository(owner, repo)
-    contents = get_repository_contents(
+IMPORTANT_FILES = {
+    "README.md",
+    "requirements.txt",
+    "pyproject.toml",
+    "package.json",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    ".env.example",
+}
+
+
+def build_file_tree(
+    owner: str,
+    repo: str,
+    branch: str = "main",
+) -> list[dict[str, Any]]:
+    url = (
+        f"{GITHUB_API}/repos/{owner}/{repo}"
+        f"/git/trees/{branch}?recursive=1"
+    )
+
+    data = _get(url)
+
+    if data.get("truncated"):
+        print(
+            "Warning: GitHub returned a truncated repository tree."
+        )
+
+    tree = []
+
+    for item in data.get("tree", []):
+        path = item["path"]
+
+        parts = path.split("/")
+
+        if any(
+            part in IGNORED_DIRECTORIES
+            for part in parts
+        ):
+            continue
+
+        if item["type"] == "tree":
+            tree.append(
+                {
+                    "path": path,
+                    "type": "directory",
+                }
+            )
+
+        elif item["type"] == "blob":
+            tree.append(
+                {
+                    "path": path,
+                    "type": "file",
+                    "size": item.get("size", 0),
+                }
+            )
+
+    return tree
+
+
+def collect_important_files(
+    owner: str,
+    repo: str,
+    tree: list[dict[str, Any]],
+    max_files: int = 20,
+) -> dict[str, str]:
+
+    selected = []
+
+    # First prioritize explicitly important files.
+    for item in tree:
+        if item["type"] != "file":
+            continue
+
+        filename = item["path"].split("/")[-1]
+
+        if filename in IMPORTANT_FILES:
+            selected.append(item["path"])
+
+    # Then add reasonable source/config files.
+    source_extensions = (
+        ".py",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".java",
+        ".go",
+        ".rs",
+        ".sql",
+        ".yml",
+        ".yaml",
+    )
+
+    for item in tree:
+        if len(selected) >= max_files:
+            break
+
+        if item["type"] != "file":
+            continue
+
+        path = item["path"]
+
+        if path in selected:
+            continue
+
+        if path.lower().endswith(source_extensions):
+            selected.append(path)
+
+    selected = selected[:max_files]
+
+    files = {}
+
+    for path in selected:
+        try:
+            files[path] = get_file(
+                owner,
+                repo,
+                path,
+            )
+        except Exception as exc:
+            files[path] = (
+                f"[Unable to read file: {exc}]"
+            )
+
+    return files
+
+
+def inspect_repository(
+    owner: str,
+    repo: str,
+) -> dict[str, Any]:
+
+    repository = get_repository(
         owner,
         repo,
     )
 
+    tree = build_file_tree(
+        owner,
+        repo,
+        repository["default_branch"],
+    )
+
+    important_files = collect_important_files(
+        owner,
+        repo,
+        tree,
+    )
+
     return {
         "repository": repository,
-        "root_contents": contents,
+        "file_tree": tree,
+        "important_files": important_files,
     }
