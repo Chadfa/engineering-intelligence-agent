@@ -1,10 +1,13 @@
 import re
 import json
+import ast
 
 from langchain_ollama import ChatOllama
 
 from app.agents.agent_tools import inspect_github_repository
 from app.agents.evidence_validator import parse_and_validate_analysis
+from app.agents.evidence_builder import build_evidence
+from app.agents.claim_validator import validate_claims                                  
 
 
 llm = ChatOllama(
@@ -73,7 +76,6 @@ def run_eia(message: str) -> str:
     # ---------------------------------------------------------
     # GITHUB REQUEST
     # ---------------------------------------------------------
-
     owner, repo = repository
 
     github_result = inspect_github_repository.invoke(
@@ -83,55 +85,83 @@ def run_eia(message: str) -> str:
         }
     )
 
+    github_data = ast.literal_eval(github_result)
+
+    evidence = build_evidence(github_data)
+
+    evidence_text = "\n".join(
+        f"{item['id']}: {item['claim']} "
+        f"(Source: {item['source']})"
+        for item in evidence
+    )
+
     analysis_prompt = f"""
 You are analyzing a GitHub repository.
 
 USER REQUEST:
 {message}
 
-VERIFIED GITHUB EVIDENCE:
-{github_result}
+VERIFIED EVIDENCE:
 
-Analyze the repository using ONLY the verified evidence above.
+{evidence_text}
+
+Your job is to produce an evidence-grounded engineering analysis.
 
 STRICT RULES:
 
-1. Treat the GitHub evidence as authoritative.
-2. Never invent numbers.
-3. Never invent files or directories.
-4. Never invent technologies.
-5. Never claim a file exists unless it appears in the evidence.
-6. Never claim a file's contents unless its contents appear in
-   the evidence.
-7. Do not confuse dependencies with actual usage.
-8. Separate verified facts from inference.
-9. If evidence is missing, explicitly say that the evidence was not
-   retrieved.
+1. Use ONLY the evidence listed above.
+2. Never invent repository facts.
+3. Never invent files.
+4. Never invent statistics.
+5. Never invent technologies.
+6. Every factual claim MUST reference one or more evidence IDs.
+7. Evidence IDs must come from the evidence list above.
+8. Do not create evidence IDs yourself.
+9. Do not use a filename as proof of its contents.
+10. A source-code claim is allowed only when the corresponding
+    file appears as retrieved source-code evidence.
+11. Separate verified facts from engineering inferences.
+12. If evidence is insufficient, say so.
 
-Return ONLY valid JSON in this exact shape:
+Return ONLY valid JSON.
+
+Use exactly this structure:
 
 {{
   "summary": "string",
-  "verified_facts": [
-    "string"
-  ],
-  "technology_observations": [
-    "string"
+  "claims": [
+    {{
+      "claim": "string",
+      "evidence_ids": ["E001"]
+    }}
   ],
   "engineering_inferences": [
-    "string"
+    {{
+      "claim": "string",
+      "evidence_ids": ["E001"]
+    }}
   ],
   "risks": [
-    "string"
+    {{
+      "claim": "string",
+      "evidence_ids": ["E001"]
+    }}
   ],
   "recommendations": [
     "string"
   ]
 }}
 
+IMPORTANT:
+
+Every item in "claims", "engineering_inferences", and "risks"
+must contain evidence_ids.
+
+Recommendations do not require evidence IDs because they are
+engineering suggestions rather than repository facts.
+
 Do not use Markdown.
-Do not add fields.
-Do not invent evidence.
+Do not add extra fields.
 """
 
     response = llm.invoke(
@@ -141,10 +171,53 @@ Do not invent evidence.
         ]
     )
 
-    validated = parse_and_validate_analysis(
-        response.content,
-        github_result,
+    try:
+        analysis = json.loads(response.content)
+
+    except json.JSONDecodeError:
+
+        return json.dumps(
+            {
+                "summary": "The analysis model returned invalid JSON.",
+                "claims": [],
+                "engineering_inferences": [],
+                "risks": [],
+                "recommendations": [],
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    validated_claims = validate_claims(
+        analysis.get("claims", []),
+        evidence,
     )
+
+    validated_inferences = validate_claims(
+        analysis.get("engineering_inferences", []),
+        evidence,
+    )
+
+    validated_risks = validate_claims(
+        analysis.get("risks", []),
+        evidence,
+    )
+
+    validated = {
+        "summary": (
+            analysis.get("summary", "")
+            if isinstance(analysis.get("summary", ""), str)
+            else ""
+        ),
+        "claims": validated_claims,
+        "engineering_inferences": validated_inferences,
+        "risks": validated_risks,
+        "recommendations": (
+            analysis.get("recommendations", [])
+            if isinstance(analysis.get("recommendations", []), list)
+            else []
+        ),
+    }
 
     return json.dumps(
         validated,
