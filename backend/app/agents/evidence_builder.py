@@ -150,7 +150,7 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
     # RETRIEVED SOURCE FILES
     # ---------------------------------------------------------
 
-    important_files = github_data.get("important_files", {})
+        important_files = github_data.get("important_files", {})
 
     for path, content in important_files.items():
 
@@ -159,9 +159,14 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
 
         if content:
 
+            excerpt = content[:1200]
+
             add_evidence(
                 "source_code",
-                f"Source content was retrieved for '{path}'.",
+                (
+                    f"Source code for '{path}' was retrieved. "
+                    f"Relevant source excerpt:\n{excerpt}"
+                ),
                 path,
             )
 

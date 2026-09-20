@@ -7,7 +7,7 @@ from langchain_ollama import ChatOllama
 from app.agents.agent_tools import inspect_github_repository
 from app.agents.evidence_validator import parse_and_validate_analysis
 from app.agents.evidence_builder import build_evidence
-from app.agents.claim_validator import validate_claims                                  
+from app.agents.claim_validator import validate_claims
 
 
 llm = ChatOllama(
@@ -93,6 +93,8 @@ def run_eia(message: str) -> str:
         f"{item['id']}: {item['claim']} "
         f"(Source: {item['source']})"
         for item in evidence
+        if item["category"] != "source_code"
+
     )
 
     analysis_prompt = f"""
@@ -171,22 +173,28 @@ Do not add extra fields.
         ]
     )
 
+
     try:
-        analysis = json.loads(response.content)
+        raw_output = response.content.strip()
+
+        if raw_output.startswith("```json"):
+            raw_output = raw_output[7:]
+
+        if raw_output.endswith("```"):
+            raw_output = raw_output[:-3]
+
+        raw_output = raw_output.strip()
+
+        analysis = json.loads(raw_output)
 
     except json.JSONDecodeError:
-
-        return json.dumps(
-            {
-                "summary": "The analysis model returned invalid JSON.",
-                "claims": [],
-                "engineering_inferences": [],
-                "risks": [],
-                "recommendations": [],
-            },
-            indent=2,
-            ensure_ascii=False,
-        )
+        return {
+            "summary": "The analysis model returned invalid JSON.",
+            "claims": [],
+            "engineering_inferences": [],
+            "risks": [],
+            "recommendations": [],
+        }
 
     validated_claims = validate_claims(
         analysis.get("claims", []),
