@@ -6,6 +6,16 @@ def _normalise(text: str) -> str:
     """Convert text into a simple comparable form."""
     return " ".join(text.lower().strip().split())
 
+def _split_claim(claim: str) -> list[str]:
+    """Split simple compound claims into smaller factual statements."""
+    parts = re.split(r"\s+and\s+", claim, flags=re.IGNORECASE)
+
+    return [
+        part.strip(" .")
+        for part in parts
+        if part.strip(" .")
+    ]
+
 
 def _claim_supported_by_evidence(
     claim: str,
@@ -20,6 +30,11 @@ def _claim_supported_by_evidence(
     """
 
     claim_text = _normalise(claim)
+
+    claim_parts = [
+        _normalise(part)
+        for part in _split_claim(claim)
+    ]
 
     for evidence in evidence_items:
 

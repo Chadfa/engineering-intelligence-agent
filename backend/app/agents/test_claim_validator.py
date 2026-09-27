@@ -19,23 +19,27 @@ if __name__ == "__main__":
     ]
 
     claims = [
-        {
-            "claim": "The repository is named 'engineering-intelligence-agent'.",
-            "evidence_ids": ["E001"],
-        },
-        {
-            "claim": "The repository uses Java.",
-            "evidence_ids": ["E002"],
-        },
-        {
-            "claim": "The repository is written in Python.",
-            "evidence_ids": ["E002"],
-        },
-        {
-            "claim": "The repository is public.",
-            "evidence_ids": ["E999"],
-        },
-    ]
+    {
+        "claim": "The repository is named 'engineering-intelligence-agent'.",
+        "evidence_ids": ["E001"],
+    },
+    {
+        "claim": "The repository uses Java.",
+        "evidence_ids": ["E002"],
+    },
+    {
+        "claim": "The repository is written in Python.",
+        "evidence_ids": ["E002"],
+    },
+    {
+        "claim": "The repository is public.",
+        "evidence_ids": ["E999"],
+    },
+    {
+        "claim": "The repository is named 'engineering-intelligence-agent' and is written in Python.",
+        "evidence_ids": ["E001", "E002"],
+    },
+]
 
     validated = validate_claims(
         claims,
