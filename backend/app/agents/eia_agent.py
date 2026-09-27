@@ -157,13 +157,38 @@ Use exactly this structure:
 IMPORTANT:
 
 Every item in "claims", "engineering_inferences", and "risks"
+
 must contain evidence_ids.
 
-Recommendations do not require evidence IDs because they are
-engineering suggestions rather than repository facts.
+Recommendations do not require evidence IDs, but they MUST be
+
+derived from verified evidence or clearly identified engineering gaps.
+
+Recommendation rules:
+
+1. Do not recommend something that the evidence already shows exists.
+
+2. Do not make generic recommendations unrelated to the repository.
+
+3. Do not recommend adding, fixing, or changing a component unless
+
+   the evidence indicates a relevant gap, limitation, or risk.
+
+4. Prefer recommendations that improve engineering quality,
+
+   maintainability, testing, documentation, security, or reliability
+
+   when the evidence supports such a need.
+
+5. If the available evidence does not reveal a clear engineering gap,
+
+   return an empty recommendations list rather than inventing one.
+
+6. Do not treat repository popularity metrics such as stars or forks
+
+   as proof that the project needs more maintenance, users, or engagement.
 
 Do not use Markdown.
-Do not add extra fields.
 """
 
     response = llm.invoke(

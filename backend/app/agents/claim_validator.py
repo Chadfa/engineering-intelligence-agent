@@ -6,6 +6,7 @@ def _normalise(text: str) -> str:
     """Convert text into a simple comparable form."""
     return " ".join(text.lower().strip().split())
 
+
 def _split_claim(claim: str) -> list[str]:
     """Split simple compound claims into smaller factual statements."""
     parts = re.split(r"\s+and\s+", claim, flags=re.IGNORECASE)
@@ -23,10 +24,6 @@ def _claim_supported_by_evidence(
 ) -> bool:
     """
     Perform a conservative deterministic check.
-
-    The validator checks whether the factual value from the evidence
-    is present in the claim. This helps distinguish supported claims
-    from claims that contain conflicting values.
     """
 
     claim_text = _normalise(claim)
@@ -47,10 +44,6 @@ def _claim_supported_by_evidence(
 
         # -----------------------------------------------------
         # Extract quoted values from evidence.
-        #
-        # Example:
-        # "Primary repository language is 'Python'."
-        #                    -> "python"
         # -----------------------------------------------------
 
         parts = evidence_text.split("'")
@@ -69,12 +62,85 @@ def _claim_supported_by_evidence(
                     return True
 
         # -----------------------------------------------------
+        # Handle file/path evidence.
+        # -----------------------------------------------------
+
+        evidence_paths = re.findall(
+            r"'([^']+)'",
+            evidence_text,
+        )
+
+        for path in evidence_paths:
+
+            path = path.strip()
+
+            normalized_path = path.replace("\\", "/")
+
+            # Match complete path.
+            if normalized_path in claim_text:
+                return True
+
+            # Match filename.
+            evidence_filename = normalized_path.split("/")[-1].strip()
+
+            if evidence_filename in claim_text:
+                return True
+
+            # Match filename without extension.
+            #
+            # Example:
+            # README -> README.md
+            #
+            evidence_stem = evidence_filename.rsplit(
+                ".",
+                1,
+            )[0]
+
+            if evidence_stem in claim_text:
+                return True
+
+        # -----------------------------------------------------
+        # Handle simple file-existence claims.
+        # -----------------------------------------------------
+
+        file_existence_patterns = [
+            r"contains (?:a|an)?\s*([.\w-]+)\s+file",
+            r"has (?:a|an)?\s*([.\w-]+)\s+file",
+            r"includes (?:a|an)?\s*([.\w-]+)\s+file",
+        ]
+
+        for pattern in file_existence_patterns:
+
+            matches = re.findall(
+                pattern,
+                claim_text,
+            )
+
+            for filename in matches:
+
+                filename = filename.strip(" .")
+
+                for path in evidence_paths:
+
+                    evidence_filename = (
+                        path.replace("\\", "/")
+                        .split("/")[-1]
+                        .strip()
+                    )
+
+                    if filename == evidence_filename:
+                        return True
+
+                    evidence_stem = evidence_filename.rsplit(
+                        ".",
+                        1,
+                    )[0]
+
+                    if filename == evidence_stem:
+                        return True
+
+        # -----------------------------------------------------
         # Check numeric factual values.
-        #
-        # Example:
-        # "Repository has 0 stars."
-        #
-        # The claim must contain "0", not "12".
         # -----------------------------------------------------
 
         evidence_numbers = re.findall(
@@ -95,92 +161,7 @@ def _claim_supported_by_evidence(
             ):
                 return True
 
-            # Evidence contains a number but the claim contains
-            # a different number.
             continue
-
-        # -----------------------------------------------------
-        # Handle file/path evidence.
-        #
-        # Example evidence:
-        # "Repository contains file 'backend/requirements.txt'."
-        #
-        # Claim:
-        # "The repository contains a 'requirements.txt' file."
-        # -----------------------------------------------------
-
-        evidence_paths = re.findall(
-            r"'([^']+)'",
-            evidence_text,
-        )
-
-        for path in evidence_paths:
-
-            path = path.strip()
-
-            # Normalize Windows-style paths.
-            normalized_path = path.replace("\\", "/")
-
-            # Match the complete path.
-            if normalized_path in claim_text:
-                return True
-
-            # Match only the filename.
-            #
-            # Example:
-            # backend/requirements.txt
-            # -> requirements.txt
-            filename = normalized_path.split("/")[-1]
-
-            if filename in claim_text:
-                return True
-
-        # -----------------------------------------------------
-        # Handle important unquoted factual terms.
-        # -----------------------------------------------------
-
-        evidence_words = [
-            word.strip(".,'\"()[]{}:")
-            for word in evidence_text.split()
-        ]
-
-        meaningful_words = [
-            word
-            for word in evidence_words
-            if len(word) >= 4
-            and word not in {
-                "repository",
-                "primary",
-                "language",
-                "name",
-                "full",
-                "description",
-                "default",
-                "branch",
-                "contains",
-                "directory",
-                "file",
-                "source",
-                "content",
-                "retrieved",
-                "project",
-                "status",
-                "archived",
-                "visibility",
-                "exists",
-            }
-        ]
-
-        if meaningful_words:
-
-            matches = sum(
-                1
-                for word in meaningful_words
-                if word in claim_text
-            )
-
-            if matches >= 1:
-                return True
 
     return False
 
