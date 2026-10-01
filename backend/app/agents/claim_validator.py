@@ -104,7 +104,58 @@ def _split_claim(claim: str) -> list[str]:
         if part.strip(" .")
     ]
 
+def _structured_repository_attribute_match(
+    claim: str,
+    evidence_items: list[dict[str, Any]],
+) -> bool:
+    """
+    Check simple repository attributes against structured evidence.
+    """
 
+    claim_text = _normalise(claim)
+
+    checks = []
+
+    language_match = re.search(
+        r"written in\s+([a-z0-9+#-]+)",
+        claim_text,
+    )
+    if language_match:
+        checks.append(("language", language_match.group(1)))
+    
+    name_match = re.search(
+        r"repository (?:is )?named ['\"]?([a-z0-9_.-]+)",
+        claim_text,
+    )
+    if name_match:
+        checks.append(("name", name_match.group(1)))
+
+    if not checks:
+        return True
+
+    for field, claimed_value in checks:
+        matched = False
+
+        for evidence in evidence_items:
+            if evidence.get("evidence_type") != "repository_metadata":
+                continue
+
+            payload = evidence.get("payload", {})
+
+            if payload.get("field") != field:
+                continue
+
+            actual_value = str(payload.get("value", "")).strip()
+
+            if claimed_value.lower() == actual_value.lower():
+                matched = True
+                break
+
+        if not matched:
+            return False
+
+    return True
+    
 def _claim_supported_by_evidence(
     claim: str,
     evidence_items: list[dict[str, Any]],
@@ -403,12 +454,15 @@ def validate_claims(
             claim,
             allowed_evidence,
         ):
-
             validation = "insufficient_evidence"
             reason = "legacy_evidence_text_only"
-
+        elif claim_type == "repo_attribute" and not _structured_repository_attribute_match(
+            claim,
+            allowed_evidence,
+        ):
+            validation = "insufficient_evidence"
+            reason = "structured_attribute_mismatch"
         else:
-
             validation = "supported"
             reason = None
 
