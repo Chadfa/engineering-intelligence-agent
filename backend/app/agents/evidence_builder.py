@@ -1,20 +1,37 @@
 from typing import Any
 
 
-def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
+def build_evidence(github_data: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Convert retrieved GitHub data into numbered evidence items.
 
-    Each item receives a stable evidence ID that the LLM can reference.
+    Each item receives a sequential evidence ID that the LLM can reference.
+    Structured metadata is attached without changing the citable claim text.
     """
 
     evidence = []
     counter = 1
+    tree_sha = github_data.get("commit_sha") or github_data.get("tree_sha")
+
+    file_tree = github_data.get("file_tree", [])
+    tree_sha_by_path = {
+        item.get("path"): item.get("sha")
+        for item in file_tree
+        if item.get("path")
+    }
 
     def add_evidence(
         category: str,
         claim: str,
         source: str,
+        *,
+        evidence_type: str,
+        subject: str,
+        payload: dict[str, Any],
+        location: dict[str, Any],
+        commit_sha: Any,
+        strength_class: str,
+        extraction_method: str,
     ):
         nonlocal counter
 
@@ -24,10 +41,31 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
                 "category": category,
                 "claim": claim,
                 "source": source,
+                "evidence_type": evidence_type,
+                "subject": subject,
+                "payload": payload,
+                "location": location,
+                "commit_sha": commit_sha,
+                "strength_class": strength_class,
+                "extraction_method": extraction_method,
             }
         )
 
         counter += 1
+
+    def add_repository_evidence(field: str, claim: str, value: Any):
+        add_evidence(
+            "repository",
+            claim,
+            "GitHub repository metadata",
+            evidence_type="repository_metadata",
+            subject=f"repository.{field}",
+            payload={"field": field, "value": value},
+            location={"field": field},
+            commit_sha=tree_sha,
+            strength_class="observed",
+            extraction_method="github_repos_api",
+        )
 
     # ---------------------------------------------------------
     # REPOSITORY METADATA
@@ -38,87 +76,85 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
     if repository:
 
         if repository.get("name") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "name",
                 f"Repository name is '{repository['name']}'.",
-                "GitHub repository metadata",
+                repository["name"],
             )
 
         if repository.get("full_name") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "full_name",
                 f"Repository full name is '{repository['full_name']}'.",
-                "GitHub repository metadata",
+                repository["full_name"],
             )
 
         if repository.get("description") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "description",
                 f"Repository description is '{repository['description']}'.",
-                "GitHub repository metadata",
+                repository["description"],
             )
 
         if repository.get("language") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "language",
                 f"Primary repository language is '{repository['language']}'.",
-                "GitHub repository metadata",
+                repository["language"],
             )
 
         if repository.get("default_branch") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "default_branch",
                 f"Default branch is '{repository['default_branch']}'.",
-                "GitHub repository metadata",
+                repository["default_branch"],
             )
 
         if repository.get("stars") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "stars",
                 f"Repository has {repository['stars']} star(s).",
-                "GitHub repository metadata",
+                repository["stars"],
             )
 
         if repository.get("forks") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "forks",
                 f"Repository has {repository['forks']} fork(s).",
-                "GitHub repository metadata",
+                repository["forks"],
             )
 
         if repository.get("open_issues") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "open_issues",
                 f"Repository has {repository['open_issues']} open issue(s).",
-                "GitHub repository metadata",
+                repository["open_issues"],
             )
 
         if repository.get("default_branch") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "default_branch",
                 f"Repository default branch is '{repository['default_branch']}'.",
-                "GitHub repository metadata",
+                repository["default_branch"],
             )
 
         if repository.get("visibility") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "visibility",
                 f"Repository visibility is '{repository['visibility']}'.",
-                "GitHub repository metadata",
+                repository["visibility"],
             )
 
         if repository.get("archived") is not None:
-            add_evidence(
-                "repository",
+            add_repository_evidence(
+                "archived",
                 f"Repository archived status is {repository['archived']}.",
-                "GitHub repository metadata",
+                repository["archived"],
             )
 
     # ---------------------------------------------------------
     # FILE TREE
     # ---------------------------------------------------------
-
-    file_tree = github_data.get("file_tree", [])
 
     for item in file_tree:
 
@@ -128,12 +164,21 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
         if not path:
             continue
 
+        item_sha = item.get("sha") or tree_sha
+
         if item_type == "directory":
 
             add_evidence(
                 "directory",
                 f"Repository contains directory '{path}'.",
                 "GitHub repository file tree",
+                evidence_type="tree_fact",
+                subject=path,
+                payload={"path": path, "type": "directory"},
+                location={"path": path},
+                commit_sha=item_sha,
+                strength_class="observed",
+                extraction_method="github_git_trees",
             )
 
         elif item_type == "file":
@@ -144,18 +189,27 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
                 "file",
                 f"Repository contains file '{path}' with size {size} bytes.",
                 "GitHub repository file tree",
+                evidence_type="tree_fact",
+                subject=path,
+                payload={"path": path, "type": "file", "size": size},
+                location={"path": path},
+                commit_sha=item_sha,
+                strength_class="observed",
+                extraction_method="github_git_trees",
             )
 
     # ---------------------------------------------------------
     # RETRIEVED SOURCE FILES
     # ---------------------------------------------------------
 
-        important_files = github_data.get("important_files", {})
+    important_files = github_data.get("important_files", {})
 
     for path, content in important_files.items():
 
         if not path:
             continue
+
+        blob_sha = tree_sha_by_path.get(path) or tree_sha
 
         if content:
 
@@ -168,6 +222,13 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
                     f"Relevant source excerpt:\n{excerpt}"
                 ),
                 path,
+                evidence_type="source_retrieval",
+                subject=path,
+                payload={"path": path, "retrieved": True},
+                location={"path": path},
+                commit_sha=blob_sha,
+                strength_class="observed",
+                extraction_method="github_contents_api",
             )
 
         else:
@@ -176,6 +237,13 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, str]]:
                 "file",
                 f"File '{path}' exists, but its contents were not retrieved.",
                 path,
+                evidence_type="source_retrieval",
+                subject=path,
+                payload={"path": path, "retrieved": False},
+                location={"path": path},
+                commit_sha=blob_sha,
+                strength_class="observed",
+                extraction_method="github_contents_api",
             )
 
     return evidence

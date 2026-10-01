@@ -20,7 +20,7 @@ def _split_claim(claim: str) -> list[str]:
 
 def _claim_supported_by_evidence(
     claim: str,
-    evidence_items: list[dict[str, str]],
+    evidence_items: list[dict[str, Any]],
 ) -> bool:
     """
     Perform a conservative deterministic check.
@@ -168,7 +168,7 @@ def _claim_supported_by_evidence(
 
 def validate_claims(
     claims: list[dict[str, Any]],
-    evidence: list[dict[str, str]],
+    evidence: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """
     Validate claims against referenced evidence IDs and

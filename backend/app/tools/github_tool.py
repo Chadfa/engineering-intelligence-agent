@@ -135,7 +135,7 @@ def build_file_tree(
     owner: str,
     repo: str,
     branch: str = "main",
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     url = (
         f"{GITHUB_API}/repos/{owner}/{repo}"
         f"/git/trees/{branch}?recursive=1"
@@ -166,6 +166,7 @@ def build_file_tree(
                 {
                     "path": path,
                     "type": "directory",
+                    "sha": item.get("sha"),
                 }
             )
 
@@ -175,10 +176,15 @@ def build_file_tree(
                     "path": path,
                     "type": "file",
                     "size": item.get("size", 0),
+                    "sha": item.get("sha"),
                 }
             )
 
-    return tree
+    return {
+        "sha": data.get("sha"),
+        "truncated": bool(data.get("truncated")),
+        "tree": tree,
+    }
 
 
 def collect_important_files(
@@ -259,11 +265,13 @@ def inspect_repository(
         repo,
     )
 
-    tree = build_file_tree(
+    tree_result = build_file_tree(
         owner,
         repo,
         repository["default_branch"],
     )
+
+    tree = tree_result["tree"]
 
     important_files = collect_important_files(
         owner,
@@ -275,4 +283,6 @@ def inspect_repository(
         "repository": repository,
         "file_tree": tree,
         "important_files": important_files,
+        "tree_sha": tree_result.get("sha"),
+        "truncated": tree_result.get("truncated", False),
     }
