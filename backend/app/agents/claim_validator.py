@@ -2,13 +2,12 @@ from typing import Any
 import re
 
 
-# Source-derived capability evidence is not produced by the evidence
-# builder in this slice, so the allow-set is intentionally empty.
+# Capability claims require explicit source-derived technology evidence.
 ALLOWED_EVIDENCE_TYPES = {
     "repo_attribute": frozenset({"repository_metadata"}),
     "existence": frozenset({"tree_fact"}),
     "structure": frozenset({"tree_fact", "repository_metadata"}),
-    "capability": frozenset(),
+    "capability": frozenset({"technology"}),
     "assessment": frozenset(),
 }
 
@@ -201,7 +200,53 @@ def _structured_path_match(
             return True
 
     return False
-   
+
+
+
+def _structured_technology_match(
+    claim: str,
+    evidence_items: list[dict[str, Any]],
+) -> bool:
+    """
+    Check technology/library claims against structured technology evidence.
+    """
+
+    claim_text = _normalise(claim)
+
+    technology_aliases = {
+        "fastapi": "FastAPI",
+        "django": "Django",
+    }
+
+    claimed_technologies = []
+
+    for alias, technology in technology_aliases.items():
+        if re.search(rf"\b{re.escape(alias)}\b", claim_text):
+            claimed_technologies.append(technology)
+
+    if not claimed_technologies:
+        return False
+
+    available_technologies = set()
+
+    for evidence in evidence_items:
+        if evidence.get("evidence_type") != "technology":
+            continue
+
+        payload = evidence.get("payload", {})
+        technology = payload.get("technology")
+
+        if technology:
+            available_technologies.add(
+                _normalise(str(technology))
+            )
+
+    for technology in claimed_technologies:
+        if _normalise(technology) not in available_technologies:
+            return False
+
+    return True
+
 def _claim_supported_by_evidence(
     claim: str,
     evidence_items: list[dict[str, Any]],
@@ -523,6 +568,24 @@ def validate_claims(
         ):
             validation = "insufficient_evidence"
             reason = "structured_path_mismatch"
+
+        elif claim_type == "capability":
+            if not _subjects_compatible(
+                claim,
+                claim_type,
+                allowed_evidence,
+            ):
+                validation = "insufficient_evidence"
+                reason = "subject_mismatch"
+            elif not _structured_technology_match(
+                claim,
+                allowed_evidence,
+            ):
+                validation = "insufficient_evidence"
+                reason = "structured_technology_mismatch"
+            else:
+                validation = "supported"
+                reason = None
         elif not _subjects_compatible(
             claim,
             claim_type,

@@ -164,10 +164,28 @@ if __name__ == "__main__":
         "extraction_method": "github_git_trees",
     }
 
+    fastapi_evidence = {
+        "id": "E006",
+        "category": "technology",
+        "claim": "Source file 'backend/main.py' explicitly imports technology 'FastAPI'.",
+        "source": "backend/main.py",
+        "evidence_type": "technology",
+        "subject": "FastAPI",
+        "payload": {
+            "technology": "FastAPI",
+            "source_path": "backend/main.py",
+        },
+        "location": {"path": "backend/main.py"},
+        "commit_sha": "blobsha3",
+        "strength_class": "observed",
+        "extraction_method": "python_ast_imports",
+    }
+
     step8b_evidence = evidence + [
         settings_evidence,
         backend_evidence,
         jwt_file_evidence,
+        fastapi_evidence,
     ]
 
     step8b_cases = [
@@ -269,6 +287,28 @@ if __name__ == "__main__":
             ],
             "expected_validation": "insufficient_evidence",
             "expected_reason": "wrong_evidence_type",
+        },
+        {
+            "name": "capability + technology + FastAPI",
+            "claims": [
+                {
+                    "claim": "The repository uses FastAPI.",
+                    "evidence_ids": ["E006"],
+                }
+            ],
+            "expected_validation": "supported",
+            "expected_reason": None,
+        },
+        {
+            "name": "capability + technology + wrong library",
+            "claims": [
+                {
+                    "claim": "The repository uses Django.",
+                    "evidence_ids": ["E006"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "structured_technology_mismatch",
         },
         {
             "name": "assessment",

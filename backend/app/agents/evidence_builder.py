@@ -1,4 +1,41 @@
 from typing import Any
+import ast
+
+
+PYTHON_TECHNOLOGY_ALIASES = {
+    "fastapi": "FastAPI",
+}
+
+
+def extract_python_technologies(source: str) -> list[str]:
+    """Extract explicitly imported technologies from Python source."""
+
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError, TypeError):
+        return []
+
+    technologies = []
+
+    for node in ast.walk(tree):
+
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                module = alias.name.split(".")[0]
+                technology = PYTHON_TECHNOLOGY_ALIASES.get(module)
+
+                if technology and technology not in technologies:
+                    technologies.append(technology)
+
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                module = node.module.split(".")[0]
+                technology = PYTHON_TECHNOLOGY_ALIASES.get(module)
+
+                if technology and technology not in technologies:
+                    technologies.append(technology)
+
+    return technologies
 
 
 def build_evidence(github_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -230,6 +267,28 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, Any]]:
                 strength_class="observed",
                 extraction_method="github_contents_api",
             )
+            if path.endswith(".py"):
+                technologies = extract_python_technologies(content)
+
+                for technology in technologies:
+                    add_evidence(
+                        "technology",
+                        (
+                            f"Source file '{path}' explicitly imports "
+                            f"technology '{technology}'."
+                        ),
+                        path,
+                        evidence_type="technology",
+                        subject=technology,
+                        payload={
+                            "technology": technology,
+                            "source_path": path,
+                        },
+                        location={"path": path},
+                        commit_sha=blob_sha,
+                        strength_class="observed",
+                        extraction_method="python_ast_imports",
+                    )
 
         else:
 
