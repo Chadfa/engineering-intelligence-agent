@@ -24,11 +24,11 @@ _ASSESSMENT_RE = re.compile(
 )
 
 _EXISTENCE_RE = re.compile(
-    r"contains (?:a |an )?[\w./-]+\s+file|"
-    r"has (?:a |an )?[\w./-]+\s+file|"
-    r"includes (?:a |an )?[\w./-]+\s+file|"
-    r"contains (?:a |an )?directory|"
-    r"has (?:a |an )?directory|"
+    r"contains (?:a |an )?[\w./-]+(?:\s+and\s+[\w./-]+)*\s+files?\b|"
+    r"has (?:a |an )?[\w./-]+(?:\s+and\s+[\w./-]+)*\s+files?\b|"
+    r"includes (?:a |an )?[\w./-]+(?:\s+and\s+[\w./-]+)*\s+files?\b|"
+    r"contains (?:a |an )?directory\b|"
+    r"has (?:a |an )?directory\b|"
     r"file exists|directory exists|"
     r"contains file|contains directory",
     re.IGNORECASE,
@@ -176,6 +176,9 @@ def _structured_path_match(
         return True
 
     claimed_path = path_match.group(1).replace("\\", "/")
+
+    if "/" not in claimed_path:
+        return True
 
     claimed_type = (
         "directory"
@@ -348,24 +351,33 @@ def _claim_supported_by_evidence(
 
 
 def _existence_names(claim: str) -> list[str]:
-    """Extract explicit file/path names from an existence claim."""
+    """Extract file or directory names from simple existence claims."""
 
     claim_text = _normalise(claim)
-    names: list[str] = []
 
-    for pattern in (
-        r"contains (?:a|an)?\s*([.\w-]+)\s+file",
-        r"has (?:a|an)?\s*([.\w-]+)\s+file",
-        r"includes (?:a|an)?\s*([.\w-]+)\s+file",
-        r"'([^']+)'",
-    ):
-        names.extend(
-            match.strip(" .")
-            for match in re.findall(pattern, claim_text)
-            if match.strip(" .")
-        )
+    match = re.search(
+        r"(?:contains|has|includes)\s+"
+        r"(.+?)\s+(?:file|files|directory|directories)\b",
+        claim_text,
+    )
 
-    return names
+    if not match:
+        return []
+
+    names_text = match.group(1)
+
+    names = re.split(r"\s+and\s+", names_text)
+
+    names = [
+        re.sub(r"^(?:a|an)\s+", "", name).strip()
+        for name in names
+    ]
+
+    return [
+        name.strip(" .,'\"")
+        for name in names
+        if name.strip(" .,'\"")
+    ]
 
 
 def _subjects_compatible(
@@ -385,18 +397,29 @@ def _subjects_compatible(
 
     for name in names:
         needle = name.replace("\\", "/").lower()
+        matched = False
 
         for evidence in evidence_items:
-            subject = str(evidence.get("subject") or "").replace("\\", "/")
+            subject = str(
+                evidence.get("subject") or ""
+            ).replace("\\", "/")
+
             payload = evidence.get("payload") or {}
-            path = str(payload.get("path") or subject).replace("\\", "/")
+
+            path = str(
+                payload.get("path") or subject
+            ).replace("\\", "/")
 
             normalized_subject = subject.lstrip("./").lower()
             normalized_path = path.lstrip("./").lower()
 
             if "/" in needle:
-                if normalized_path == needle or normalized_subject == needle:
-                    return True
+                if (
+                    normalized_path == needle
+                    or normalized_subject == needle
+                ):
+                    matched = True
+                    break
             else:
                 if (
                     normalized_path == needle
@@ -404,9 +427,13 @@ def _subjects_compatible(
                     or normalized_path.rsplit("/", 1)[-1] == needle
                     or normalized_subject.rsplit("/", 1)[-1] == needle
                 ):
-                    return True
+                    matched = True
+                    break
 
-    return False
+        if not matched:
+            return False
+
+    return True
 
 
 def validate_claims(
@@ -484,33 +511,31 @@ def validate_claims(
             validation = "insufficient_evidence"
             reason = "wrong_evidence_type"
 
+        elif claim_type == "repo_attribute" and not _structured_repository_attribute_match(
+            claim,
+            allowed_evidence,
+        ):
+            validation = "insufficient_evidence"
+            reason = "structured_attribute_mismatch"
+        elif claim_type == "existence" and not _structured_path_match(
+            claim,
+            allowed_evidence,
+        ):
+            validation = "insufficient_evidence"
+            reason = "structured_path_mismatch"
         elif not _subjects_compatible(
             claim,
             claim_type,
             allowed_evidence,
         ):
-
             validation = "insufficient_evidence"
             reason = "subject_mismatch"
-
         elif not _claim_supported_by_evidence(
             claim,
             allowed_evidence,
         ):
             validation = "insufficient_evidence"
             reason = "legacy_evidence_text_only"
-        elif claim_type == "repo_attribute" and not _structured_repository_attribute_match(
-                claim,
-                allowed_evidence,
-        ):
-                validation = "insufficient_evidence"
-                reason = "structured_attribute_mismatch"
-        elif claim_type == "existence" and not _structured_path_match(
-                claim,
-                allowed_evidence,
-        ):
-                validation = "insufficient_evidence"
-                reason = "structured_path_mismatch"
         else:
                 validation = "supported"
                 reason = None

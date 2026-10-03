@@ -238,6 +238,17 @@ if __name__ == "__main__":
             "expected_reason": "wrong_evidence_type",
         },
         {
+            "name": "existence + compound paths with missing entity",
+            "claims": [
+                {
+                    "claim": "The repository contains settings.py and app.py files.",
+                    "evidence_ids": ["E003"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "subject_mismatch",
+        },
+        {
             "name": "structure + tree_fact",
             "claims": [
                 {
