@@ -205,6 +205,39 @@ if __name__ == "__main__":
             "expected_reason": None,
         },
         {
+            "name": "existence + tree_fact + wrong filename",
+            "claims": [
+                {
+                    "claim": "The repository contains a config.py file.",
+                    "evidence_ids": ["E003"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "subject_mismatch",
+        },
+        {
+            "name": "existence + tree_fact + partial path",
+            "claims": [
+                {
+                    "claim": "The repository contains backend/settings.py file.",
+                    "evidence_ids": ["E003"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "structured_path_mismatch",
+        },
+        {
+            "name": "existence + tree_fact + wrong type",
+            "claims": [
+                {
+                    "claim": "The repository contains a settings.py directory.",
+                    "evidence_ids": ["E003"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "wrong_evidence_type",
+        },
+        {
             "name": "structure + tree_fact",
             "claims": [
                 {
