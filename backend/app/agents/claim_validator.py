@@ -121,7 +121,7 @@ def _structured_repository_attribute_match(
     )
     if language_match:
         checks.append(("language", language_match.group(1)))
-    
+
     name_match = re.search(
         r"repository (?:is )?named ['\"]?([a-z0-9_.-]+)",
         claim_text,
@@ -155,51 +155,45 @@ def _structured_repository_attribute_match(
 
     return True
 
+
 def _structured_path_match(
     claim: str,
     evidence_items: list[dict[str, Any]],
 ) -> bool:
-    """
-    Check simple file/directory existence claims against tree facts.
-    """
+    """Check every named file/directory against structured tree facts."""
+
+    names = _existence_names(claim)
+
+    if not names:
+        return True
 
     claim_text = _normalise(claim)
-
-    path_match = re.search(
-        r"(?:contains|has|includes)\s+(?:a|an)?\s*"
-        r"([a-z0-9_./\\-]+)\s+(?:file|directory)\b",
-        claim_text,
-    )
-
-    if not path_match:
-        return True
-
-    claimed_path = path_match.group(1).replace("\\", "/")
-
-    if "/" not in claimed_path:
-        return True
-
     claimed_type = (
         "directory"
-        if "directory" in path_match.group(0)
+        if "directory" in claim_text
         else "file"
     )
 
-    for evidence in evidence_items:
-        if evidence.get("evidence_type") != "tree_fact":
-            continue
+    available_paths = {
+        (
+            str(item.get("payload", {}).get("path", "")).replace("\\", "/"),
+            item.get("payload", {}).get("type"),
+        )
+        for item in evidence_items
+        if item.get("evidence_type") == "tree_fact"
+    }
 
-        payload = evidence.get("payload", {})
-        evidence_path = str(payload.get("path", "")).replace("\\", "/")
-        evidence_type = payload.get("type")
+    for name in names:
+        claimed_path = name.replace("\\", "/")
 
-        if (
-            evidence_path == claimed_path
-            and evidence_type == claimed_type
+        if not any(
+            path == claimed_path and path_type == claimed_type
+            for path, path_type in available_paths
         ):
-            return True
+            return False
 
-    return False
+    return True
+
 
 
 
@@ -562,12 +556,29 @@ def validate_claims(
         ):
             validation = "insufficient_evidence"
             reason = "structured_attribute_mismatch"
-        elif claim_type == "existence" and not _structured_path_match(
-            claim,
-            allowed_evidence,
-        ):
-            validation = "insufficient_evidence"
-            reason = "structured_path_mismatch"
+
+        elif claim_type == "existence":
+            if not _structured_path_match(
+                claim,
+                allowed_evidence,
+            ):
+                names = _existence_names(claim)
+                reason = (
+                    "structured_path_mismatch"
+                    if any("/" in name for name in names)
+                    else "subject_mismatch"
+                )
+                validation = "insufficient_evidence"
+            elif not _subjects_compatible(
+                claim,
+                claim_type,
+                allowed_evidence,
+            ):
+                validation = "insufficient_evidence"
+                reason = "subject_mismatch"
+            else:
+                validation = "supported"
+                reason = None
 
         elif claim_type == "capability":
             if not _subjects_compatible(
@@ -586,6 +597,7 @@ def validate_claims(
             else:
                 validation = "supported"
                 reason = None
+
         elif not _subjects_compatible(
             claim,
             claim_type,
@@ -593,15 +605,18 @@ def validate_claims(
         ):
             validation = "insufficient_evidence"
             reason = "subject_mismatch"
+
         elif not _claim_supported_by_evidence(
             claim,
             allowed_evidence,
         ):
             validation = "insufficient_evidence"
             reason = "legacy_evidence_text_only"
+
         else:
-                validation = "supported"
-                reason = None
+            validation = "supported"
+            reason = None
+
 
         validated_claims.append(
             {
