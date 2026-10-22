@@ -180,12 +180,29 @@ if __name__ == "__main__":
         "strength_class": "observed",
         "extraction_method": "python_ast_imports",
     }
+    django_evidence = {
+        "id": "E007",
+        "category": "technology",
+        "claim": "Source file 'backend/django_app.py' explicitly imports technology 'Django'.",
+        "source": "backend/django_app.py",
+        "evidence_type": "technology",
+        "subject": "Django",
+        "payload": {
+            "technology": "Django",
+            "source_path": "backend/django_app.py",
+        },
+        "location": {"path": "backend/django_app.py"},
+        "commit_sha": "blobsha4",
+        "strength_class": "observed",
+        "extraction_method": "python_ast_imports",
+    }
 
     step8b_evidence = evidence + [
         settings_evidence,
         backend_evidence,
         jwt_file_evidence,
         fastapi_evidence,
+        django_evidence,
     ]
 
     step8b_cases = [
@@ -309,6 +326,28 @@ if __name__ == "__main__":
             ],
             "expected_validation": "insufficient_evidence",
             "expected_reason": "structured_technology_mismatch",
+        },
+        {
+            "name": "compound technology claim with missing library",
+            "claims": [
+                {
+                    "claim": "The repository uses FastAPI and Django.",
+                    "evidence_ids": ["E006"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "structured_technology_mismatch",
+        },
+        {
+            "name": "compound technology claim with both libraries",
+            "claims": [
+                {
+                    "claim": "The repository uses FastAPI and Django.",
+                    "evidence_ids": ["E006", "E007"],
+                }
+            ],
+            "expected_validation": "supported",
+            "expected_reason": None,
         },
         {
             "name": "assessment",
