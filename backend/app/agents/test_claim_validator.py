@@ -215,6 +215,25 @@ if __name__ == "__main__":
         "strength_class": "observed",
         "extraction_method": "requirements_txt",
     }
+    fastapi_pyproject_evidence = {
+        "id": "E009",
+        "category": "technology",
+        "claim": "Dependency file 'backend/pyproject.toml' declares technology 'FastAPI'.",
+        "source": "backend/pyproject.toml",
+        "evidence_type": "technology",
+        "subject": "FastAPI",
+        "payload": {
+            "technology": "FastAPI",
+            "package_name": "fastapi",
+            "version_specifier": ">=0.100",
+            "source_path": "backend/pyproject.toml",
+            "relation": "declares_dependency",
+        },
+        "location": {"path": "backend/pyproject.toml"},
+        "commit_sha": "blobsha6",
+        "strength_class": "observed",
+        "extraction_method": "pyproject_toml",
+    }
     step8b_evidence = evidence + [
         settings_evidence,
         backend_evidence,
@@ -222,6 +241,7 @@ if __name__ == "__main__":
         fastapi_evidence,
         django_evidence,
         fastapi_dependency_evidence,
+        fastapi_pyproject_evidence,
     ]
 
     step8b_cases = [
@@ -455,6 +475,39 @@ if __name__ == "__main__":
             ],
             "expected_validation": "insufficient_evidence",
             "expected_reason": "wrong_evidence_type",
+        },
+        {
+            "name": "dependency declaration + pyproject evidence",
+            "claims": [
+                {
+                    "claim": "The repository declares FastAPI as a dependency.",
+                    "evidence_ids": ["E009"],
+                }
+            ],
+            "expected_validation": "supported",
+            "expected_reason": None,
+        },
+        {
+            "name": "pyproject dependency evidence cannot support import claim",
+            "claims": [
+                {
+                    "claim": "The repository imports FastAPI.",
+                    "evidence_ids": ["E009"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "structured_technology_mismatch",
+        },
+        {
+            "name": "pyproject dependency evidence cannot establish usage",
+            "claims": [
+                {
+                    "claim": "The repository uses FastAPI.",
+                    "evidence_ids": ["E009"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "usage_not_established",
         },
     ]
 

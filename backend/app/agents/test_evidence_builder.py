@@ -4,6 +4,7 @@ from app.agents.agent_tools import inspect_github_repository
 from app.agents.evidence_builder import (
     build_evidence,
     extract_python_dependencies,
+    extract_pyproject_dependencies,
 )
 
 REQUIRED_FIELDS = (
@@ -101,6 +102,41 @@ requests==2.32.0
     )
 
     print("PASS: dependency extraction checks")
+
+def check_pyproject_dependency_extraction():
+    content = """
+[project]
+name = "sample-project"
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn>=0.30",
+    "requests>=2.32",
+]
+"""
+
+    dependencies = extract_pyproject_dependencies(content)
+
+    _assert(
+        len(dependencies) == 1,
+        f"expected one recognized dependency, got {dependencies}",
+    )
+
+    _assert(
+        dependencies[0]["technology"] == "FastAPI",
+        "FastAPI dependency was not recognized",
+    )
+
+    _assert(
+        dependencies[0]["package_name"] == "fastapi",
+        "package name was not extracted correctly",
+    )
+
+    _assert(
+        dependencies[0]["version_specifier"] == "==0.141.1",
+        "version specifier was not extracted correctly",
+    )
+
+    print("PASS: pyproject.toml dependency extraction checks")
 
 def check_synthetic_evidence():
     github_data = {
@@ -278,6 +314,7 @@ if __name__ == "__main__":
 
     check_synthetic_evidence()
     check_dependency_extraction()
+    check_pyproject_dependency_extraction()
 
     github_result = inspect_github_repository.invoke(
         {

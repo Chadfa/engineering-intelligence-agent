@@ -1,6 +1,7 @@
 from typing import Any
 import ast
 import re
+import tomli
 
 PYTHON_TECHNOLOGY_ALIASES = {
     "fastapi": "FastAPI",
@@ -76,6 +77,55 @@ def extract_python_dependencies(content: str) -> list[dict[str, str]]:
     return dependencies
 
 
+def extract_pyproject_dependencies(content: str) -> list[dict[str, str]]:
+    """Extract recognized dependencies from pyproject.toml."""
+
+    try:
+        data = tomli.loads(content)
+    except (tomli.TOMLDecodeError, TypeError):
+        return []
+
+    if not isinstance(data, dict):
+        return []
+
+    project = data.get("project", {})
+    if not isinstance(project, dict):
+        return []
+
+    declared_dependencies = project.get("dependencies", [])
+    if not isinstance(declared_dependencies, list):
+        return []
+
+    dependencies = []
+
+    for requirement in declared_dependencies:
+        if not isinstance(requirement, str):
+            continue
+        match = re.match(
+            r"^([A-Za-z0-9][A-Za-z0-9._-]*)",
+            requirement,
+        )
+
+        if not match:
+            continue
+
+        package_name = match.group(1)
+        normalized_name = package_name.lower().replace("-", "_").replace(".", "_")
+
+        technology = PYTHON_TECHNOLOGY_ALIASES.get(normalized_name)
+
+        if not technology:
+            continue
+
+        dependencies.append(
+            {
+                "technology": technology,
+                "package_name": package_name,
+                "version_specifier": requirement[len(package_name):].strip(),
+            }
+        )
+
+    return dependencies
 
 def build_evidence(github_data: dict[str, Any]) -> list[dict[str, Any]]:
     """
@@ -353,6 +403,31 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, Any]]:
                         commit_sha=blob_sha,
                         strength_class="observed",
                         extraction_method="requirements_txt",
+                    )
+            if path.endswith("pyproject.toml"):
+                dependencies = extract_pyproject_dependencies(content)
+
+                for dependency in dependencies:
+                    technology = dependency["technology"]
+
+                    add_evidence(
+                        "technology",
+                        (
+                            f"Dependency file '{path}' declares "
+                            f"technology '{technology}'."
+                        ),
+                        path,
+                        evidence_type="technology",
+                        subject=technology,
+                        payload={
+                            **dependency,
+                            "source_path": path,
+                            "relation": "declares_dependency",
+                        },
+                        location={"path": path},
+                        commit_sha=blob_sha,
+                        strength_class="observed",
+                        extraction_method="pyproject_toml",
                     )
         else:
 

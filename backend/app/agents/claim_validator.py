@@ -207,6 +207,8 @@ def _technology_claim_is_import(claim: str) -> bool:
             claim_text,
         )
     )
+
+
 def _technology_claim_is_dependency(claim: str) -> bool:
     """Return True only for explicit dependency declaration claims."""
 
@@ -219,6 +221,8 @@ def _technology_claim_is_dependency(claim: str) -> bool:
             claim_text,
         )
     )
+
+
 def _structured_technology_match(
     claim: str,
     evidence_items: list[dict[str, Any]],
@@ -268,7 +272,8 @@ def _structured_technology_match(
         elif _technology_claim_is_dependency(claim):
             if (
                 relation != "declares_dependency"
-                or evidence.get("extraction_method") != "requirements_txt"
+                or evidence.get("extraction_method")
+                not in {"requirements_txt", "pyproject_toml"}
             ):
                 continue
 
