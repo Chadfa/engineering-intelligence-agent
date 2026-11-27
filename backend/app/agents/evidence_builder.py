@@ -281,8 +281,9 @@ def build_evidence(github_data: dict[str, Any]) -> list[dict[str, Any]]:
                         evidence_type="technology",
                         subject=technology,
                         payload={
-                            "technology": technology,
-                            "source_path": path,
+                           "technology": technology,
+                           "source_path": path,
+                           "relation": "imports",
                         },
                         location={"path": path},
                         commit_sha=blob_sha,

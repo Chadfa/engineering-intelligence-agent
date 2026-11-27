@@ -57,6 +57,16 @@ def github_analysis_node(state: EIAState) -> EIAState:
             "response": "No GitHub repository data was retrieved.",
         }
 
+    response = run_eia(
+        state["user_message"],
+        github_data=github_data,
+    )
+
+    return {
+        **state,
+        "response": response,
+    }
+
     repository = github_data["repository"]
     file_tree = github_data["file_tree"]
     important_files = github_data["important_files"]

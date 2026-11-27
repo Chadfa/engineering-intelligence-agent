@@ -45,6 +45,11 @@ def check_evidence_item(item: dict, index: int):
     )
     _assert(isinstance(item["subject"], str), f"item {index} subject is not a str")
     _assert(isinstance(item["payload"], dict), f"item {index} payload is not a dict")
+    if item["evidence_type"] == "technology":
+        _assert(
+            item["payload"].get("relation") == "imports",
+            f"item {index} technology relation is not imports",
+        )
     _assert(isinstance(item["location"], dict), f"item {index} location is not a dict")
     _assert(
         item["commit_sha"] is None or isinstance(item["commit_sha"], str),

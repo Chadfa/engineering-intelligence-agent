@@ -196,13 +196,23 @@ def _structured_path_match(
 
 
 
+def _technology_claim_is_import(claim: str) -> bool:
+    """Return True only for explicit technology import claims."""
 
+    claim_text = _normalise(claim)
+
+    return bool(
+        re.search(
+            r"\bimports?\b",
+            claim_text,
+        )
+    )
 def _structured_technology_match(
     claim: str,
     evidence_items: list[dict[str, Any]],
 ) -> bool:
     """
-    Check technology/library claims against structured technology evidence.
+    Check technology claims against structured technology evidence.
     """
 
     claim_text = _normalise(claim)
@@ -228,6 +238,20 @@ def _structured_technology_match(
             continue
 
         payload = evidence.get("payload", {})
+
+        # Only import evidence can support an import claim.
+        relation = payload.get("relation")
+
+        # Backward compatibility for older AST import evidence.
+        if (
+            relation is None
+            and evidence.get("extraction_method") == "python_ast_imports"
+        ):
+            relation = "imports"
+
+        if relation != "imports":
+            continue
+
         technology = payload.get("technology")
 
         if technology:
@@ -581,19 +605,25 @@ def validate_claims(
                 reason = None
 
         elif claim_type == "capability":
-            if not _subjects_compatible(
+            if not _technology_claim_is_import(claim):
+                validation = "insufficient_evidence"
+                reason = "usage_not_established"
+
+            elif not _subjects_compatible(
                 claim,
                 claim_type,
                 allowed_evidence,
             ):
                 validation = "insufficient_evidence"
                 reason = "subject_mismatch"
+
             elif not _structured_technology_match(
                 claim,
                 allowed_evidence,
             ):
                 validation = "insufficient_evidence"
                 reason = "structured_technology_mismatch"
+
             else:
                 validation = "supported"
                 reason = None

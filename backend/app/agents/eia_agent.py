@@ -54,7 +54,10 @@ def extract_github_repository(message: str):
     return None
 
 
-def run_eia(message: str) -> str:
+def run_eia(
+    message: str,
+    github_data: dict | None = None,
+    ) -> str:
 
     repository = extract_github_repository(message)
 
@@ -76,16 +79,17 @@ def run_eia(message: str) -> str:
     # ---------------------------------------------------------
     # GITHUB REQUEST
     # ---------------------------------------------------------
-    owner, repo = repository
+    if github_data is None:
+        owner, repo = repository
 
-    github_result = inspect_github_repository.invoke(
-        {
-            "owner": owner,
-            "repo": repo,
-        }
-    )
+        github_result = inspect_github_repository.invoke(
+            {
+                "owner": owner,
+                "repo": repo,
+            }
+        )
 
-    github_data = ast.literal_eval(github_result)
+        github_data = ast.literal_eval(github_result)
 
     evidence = build_evidence(github_data)
 

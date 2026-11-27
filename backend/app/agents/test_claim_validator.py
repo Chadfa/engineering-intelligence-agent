@@ -309,7 +309,7 @@ if __name__ == "__main__":
             "name": "capability + technology + FastAPI",
             "claims": [
                 {
-                    "claim": "The repository uses FastAPI.",
+                   "claim": "The repository imports FastAPI.",
                     "evidence_ids": ["E006"],
                 }
             ],
@@ -320,7 +320,7 @@ if __name__ == "__main__":
             "name": "capability + technology + wrong library",
             "claims": [
                 {
-                    "claim": "The repository uses Django.",
+                    "claim": "The repository imports Django.",
                     "evidence_ids": ["E006"],
                 }
             ],
@@ -331,7 +331,7 @@ if __name__ == "__main__":
             "name": "compound technology claim with missing library",
             "claims": [
                 {
-                    "claim": "The repository uses FastAPI and Django.",
+                    "claim": "The repository imports FastAPI and Django.",
                     "evidence_ids": ["E006"],
                 }
             ],
@@ -342,7 +342,7 @@ if __name__ == "__main__":
             "name": "compound technology claim with both libraries",
             "claims": [
                 {
-                    "claim": "The repository uses FastAPI and Django.",
+                    "claim": "The repository imports FastAPI and Django.",
                     "evidence_ids": ["E006", "E007"],
                 }
             ],
