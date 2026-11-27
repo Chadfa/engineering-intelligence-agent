@@ -207,6 +207,18 @@ def _technology_claim_is_import(claim: str) -> bool:
             claim_text,
         )
     )
+def _technology_claim_is_dependency(claim: str) -> bool:
+    """Return True only for explicit dependency declaration claims."""
+
+    claim_text = _normalise(claim)
+
+    return bool(
+        re.search(
+            r"\b(declares?|listed as|lists)\b.*\bdependency\b|"
+            r"\bdependency\b.*\b(declares?|listed|lists)\b",
+            claim_text,
+        )
+    )
 def _structured_technology_match(
     claim: str,
     evidence_items: list[dict[str, Any]],
@@ -239,7 +251,6 @@ def _structured_technology_match(
 
         payload = evidence.get("payload", {})
 
-        # Only import evidence can support an import claim.
         relation = payload.get("relation")
 
         # Backward compatibility for older AST import evidence.
@@ -249,7 +260,19 @@ def _structured_technology_match(
         ):
             relation = "imports"
 
-        if relation != "imports":
+        # Match evidence relation to the claim wording.
+        if _technology_claim_is_import(claim):
+            if relation != "imports":
+                continue
+
+        elif _technology_claim_is_dependency(claim):
+            if (
+                relation != "declares_dependency"
+                or evidence.get("extraction_method") != "requirements_txt"
+            ):
+                continue
+
+        else:
             continue
 
         technology = payload.get("technology")
@@ -605,7 +628,10 @@ def validate_claims(
                 reason = None
 
         elif claim_type == "capability":
-            if not _technology_claim_is_import(claim):
+            if not (
+                _technology_claim_is_import(claim)
+                or _technology_claim_is_dependency(claim)
+            ):
                 validation = "insufficient_evidence"
                 reason = "usage_not_established"
 

@@ -1,8 +1,10 @@
 import ast
 
 from app.agents.agent_tools import inspect_github_repository
-from app.agents.evidence_builder import build_evidence
-
+from app.agents.evidence_builder import (
+    build_evidence,
+    extract_python_dependencies,
+)
 
 REQUIRED_FIELDS = (
     "id",
@@ -47,8 +49,11 @@ def check_evidence_item(item: dict, index: int):
     _assert(isinstance(item["payload"], dict), f"item {index} payload is not a dict")
     if item["evidence_type"] == "technology":
         _assert(
-            item["payload"].get("relation") == "imports",
-            f"item {index} technology relation is not imports",
+            item["payload"].get("relation") in {
+                "imports",
+                "declares_dependency",
+            },
+            f"item {index} has an invalid technology relation",
         )
     _assert(isinstance(item["location"], dict), f"item {index} location is not a dict")
     _assert(
@@ -64,6 +69,38 @@ def check_evidence_item(item: dict, index: int):
         f"item {index} extraction_method is not a str",
     )
 
+
+def check_dependency_extraction():
+    content = """
+fastapi==0.141.1
+uvicorn>=0.30
+# This is a comment
+requests==2.32.0
+"""
+
+    dependencies = extract_python_dependencies(content)
+
+    _assert(
+        len(dependencies) == 1,
+        f"expected one recognized dependency, got {dependencies}",
+    )
+
+    _assert(
+        dependencies[0]["technology"] == "FastAPI",
+        "FastAPI dependency was not recognized",
+    )
+
+    _assert(
+        dependencies[0]["package_name"] == "fastapi",
+        "package name was not extracted correctly",
+    )
+
+    _assert(
+        dependencies[0]["version_specifier"] == "==0.141.1",
+        "version specifier was not extracted correctly",
+    )
+
+    print("PASS: dependency extraction checks")
 
 def check_synthetic_evidence():
     github_data = {
@@ -240,6 +277,7 @@ def check_synthetic_evidence():
 if __name__ == "__main__":
 
     check_synthetic_evidence()
+    check_dependency_extraction()
 
     github_result = inspect_github_repository.invoke(
         {

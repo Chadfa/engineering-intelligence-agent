@@ -196,13 +196,32 @@ if __name__ == "__main__":
         "strength_class": "observed",
         "extraction_method": "python_ast_imports",
     }
-
+    fastapi_dependency_evidence = {
+        "id": "E008",
+        "category": "technology",
+        "claim": "Dependency file 'backend/requirements.txt' declares technology 'FastAPI'.",
+        "source": "backend/requirements.txt",
+        "evidence_type": "technology",
+        "subject": "FastAPI",
+        "payload": {
+            "technology": "FastAPI",
+            "package_name": "fastapi",
+            "version_specifier": "==0.141.1",
+            "source_path": "backend/requirements.txt",
+            "relation": "declares_dependency",
+        },
+        "location": {"path": "backend/requirements.txt"},
+        "commit_sha": "blobsha5",
+        "strength_class": "observed",
+        "extraction_method": "requirements_txt",
+    }
     step8b_evidence = evidence + [
         settings_evidence,
         backend_evidence,
         jwt_file_evidence,
         fastapi_evidence,
         django_evidence,
+        fastapi_dependency_evidence,
     ]
 
     step8b_cases = [
@@ -348,6 +367,50 @@ if __name__ == "__main__":
             ],
             "expected_validation": "supported",
             "expected_reason": None,
+        },
+        {
+            "name": "dependency declaration + requirements evidence",
+            "claims": [
+                {
+                    "claim": "The repository declares FastAPI as a dependency.",
+                    "evidence_ids": ["E008"],
+                }
+            ],
+            "expected_validation": "supported",
+            "expected_reason": None,
+        },
+        {
+            "name": "dependency evidence cannot support import claim",
+            "claims": [
+                {
+                    "claim": "The repository imports FastAPI.",
+                    "evidence_ids": ["E008"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "structured_technology_mismatch",
+        },
+        {
+            "name": "dependency evidence cannot establish usage",
+            "claims": [
+                {
+                    "claim": "The repository uses FastAPI.",
+                    "evidence_ids": ["E008"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "usage_not_established",
+        },
+        {
+            "name": "dependency declaration with wrong technology",
+            "claims": [
+                {
+                    "claim": "The repository declares Django as a dependency.",
+                    "evidence_ids": ["E008"],
+                }
+            ],
+            "expected_validation": "insufficient_evidence",
+            "expected_reason": "structured_technology_mismatch",
         },
         {
             "name": "assessment",
